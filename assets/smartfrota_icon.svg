@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Rota -->
+  <path d="M22 140 H178" stroke="#FB923C" stroke-width="13" stroke-linecap="round"/>
+  <!-- Pino de localizacao -->
+  <circle cx="100" cy="88" r="50" fill="#FFFFFF"/>
+  <path d="M66 92 L134 92 L100 146 Z" fill="#FFFFFF"/>
+  <circle cx="100" cy="88" r="21" fill="#0F172A"/>
+</svg>

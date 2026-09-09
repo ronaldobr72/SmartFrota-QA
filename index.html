@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base href="/SmartFrota-QA/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="SmartFrota - Ambiente de Homologação">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="SmartFrota (Homolog)">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png" />
+
+  <!-- Flet specific -->
+  <meta name="flet-route-url-strategy" content="path">
+  <meta name="flet-web-pyodide" content="true">
+  <meta name="flet-websocket-endpoint-path" content="/ws">
+
+  <title>SmartFrota (Homolog)</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script>
+    var webRenderer = "auto";
+    var useColorEmoji = false;
+  </script>
+
+  <script>webRenderer="canvaskit";</script>
+  <script>useColorEmoji=false;</script>
+
+  
+        <script>
+            var micropipIncludePre = false;
+            var pythonModuleName = "main_mobile";
+        </script>
+        <script src="python.js"></script>
+        
+
+  <script>
+    // The value below is injected by flutter build, do not touch.
+    const serviceWorkerVersion = "1788954011";
+  </script>
+  <!-- This script adds the flutter initialization JS code -->
+  <script src="flutter.js" defer></script>
+<meta name="theme-color" content="#EA580C">
+</head>
+
+<body>
+  <div id="loading">
+    <style>
+      body {
+        inset: 0;
+        overflow: hidden;
+        margin: 0;
+        padding: 0;
+        position: fixed;
+      }
+
+      #loading {
+        align-items: center;
+        display: flex;
+        height: 100%;
+        justify-content: center;
+        width: 100%;
+      }
+
+      #loading img {
+        animation: 1s ease-in-out 0s infinite alternate breathe;
+        opacity: .66;
+        transition: opacity .4s;
+      }
+
+      #loading.main_done img {
+        opacity: 1;
+      }
+
+      #loading.init_done img {
+        animation: .33s ease-in-out 0s 1 forwards zooooom;
+        opacity: .05;
+      }
+
+      @keyframes breathe {
+        from {
+          transform: scale(0.4);
+          opacity: 1.0;
+        }
+
+        to {
+          transform: scale(0.35);
+          opacity: .7;
+        }
+      }
+
+      @keyframes zooooom {
+        from {
+          transform: scale(0.4)
+        }
+
+        to {
+          transform: scale(10)
+        }
+      }
+    </style>
+    <img src="icons/loading-animation.png" alt="Loading..." />
+  </div>
+  <script>
+    window.addEventListener('load', function () {
+      var loading = document.querySelector('#loading');
+      _flutter.loader.loadEntrypoint({
+        serviceWorker: {
+          serviceWorkerVersion: serviceWorkerVersion,
+        }
+      }).then(function (engineInitializer) {
+        loading.classList.add('main_done');
+        return engineInitializer.initializeEngine({
+          renderer: webRenderer,
+          useColorEmoji: useColorEmoji,
+        });
+      }).then(function (appRunner) {
+        loading.classList.add('init_done');
+        return appRunner.runApp();
+      }).then(function (app) {
+        // Wait a few milliseconds so users can see the "zoooom" animation
+        // before getting rid of the "loading" div.
+        window.setTimeout(function () {
+          loading.remove();
+        }, 200);
+      });
+    });
+  </script>
+<script>
+(function(){
+  try {
+    if (!('geolocation' in navigator)) return;
+    var bc = new BroadcastChannel('smartfrota_gps');
+    
+    // 1. Background Keep-Alive via audio silencioso em loop
+    // Mantem o worker e a escuta do GPS ativos em segundo plano (ex.: motorista usando Waze)
+    var bgAudio = null;
+    function startBgKeepAlive() {
+      try {
+        if (!bgAudio) {
+          bgAudio = document.createElement('audio');
+          bgAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+          bgAudio.loop = true;
+          bgAudio.volume = 0.01;
+        }
+        bgAudio.play().catch(function(){});
+      } catch(e) {}
+      try {
+        if ('wakeLock' in navigator && !window._smartWakeLock) {
+          navigator.wakeLock.request('screen').then(function(lock){ window._smartWakeLock = lock; }).catch(function(){});
+        }
+      } catch(e) {}
+    }
+    document.addEventListener('click', startBgKeepAlive);
+    document.addEventListener('touchstart', startBgKeepAlive);
+
+    // 2. watchPosition continuo de alta precisao
+    var watchOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 3000 };
+    function onPos(pos) {
+      try {
+        bc.postMessage({
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          speed: pos.coords.speed,
+          heading: pos.coords.heading,
+          timestamp: pos.timestamp
+        });
+      } catch(e) {}
+    }
+    navigator.geolocation.watchPosition(onPos, function(err){}, watchOptions);
+
+    // 3. Ao retornar para o app (visibilidade restabelecida ao sair do Waze)
+    // Forca leitura imediata de posicao fresca para atualizacao instantanea
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        startBgKeepAlive();
+        navigator.geolocation.getCurrentPosition(function(pos) {
+          try {
+            bc.postMessage({
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+              wake: true
+            });
+          } catch(e) {}
+        }, function(err){}, { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 });
+      }
+    });
+  } catch(e) {
+    console.log('GPS bridge error', e);
+  }
+})();
+</script></body>
+
+</html>
